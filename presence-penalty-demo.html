@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Presence Penalty · 说过的词，要交税</title>
+<style>
+:root{
+  --bg:#13170E;
+  --panel:#1C2116;
+  --panel2:#242A1C;
+  --line:#333B27;
+  --ink:#EDEBDC;
+  --muted:#8B9078;
+  --amber:#E5B93C;
+  --red:#E06B44;
+  --green:#7EC17E;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.7;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1200px;margin:0 auto;padding:32px 22px 64px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:28px;align-items:start}
+.stage{min-width:0}
+.panel{min-width:0;display:flex;flex-direction:column;gap:18px;position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;scrollbar-width:thin;padding-right:4px}
+.panel h1{font-size:clamp(28px,3.4vw,40px)}
+.panel .lede{margin-bottom:0}
+.panel .console{margin-bottom:0}
+.panel footer{margin-top:2px}
+.side-hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin:2px 2px 0;text-align:center;letter-spacing:.04em}
+
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--amber);text-transform:uppercase;margin:0 0 12px;font-weight:700}
+h1{font-size:clamp(32px,6.2vw,54px);font-weight:800;letter-spacing:-.035em;line-height:1.08;margin:0 0 14px}
+.lede{color:var(--muted);font-size:17px;margin:0 0 34px;max-width:56ch}
+
+/* 控制台 */
+.console{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px 24px 18px;margin-bottom:14px}
+.pline{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.pline .lab{font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:.1em}
+.pline .num{font-family:var(--mono);font-size:clamp(38px,8vw,54px);font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--amber);font-variant-numeric:tabular-nums;transition:color .2s}
+.pline .tag{font-size:14px;font-weight:700;padding:5px 13px;border-radius:99px;background:var(--panel2);border:1px solid var(--line)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:99px;background:linear-gradient(90deg,#6D5A9E 0%,#4A5240 42%,#4A5240 52%,#B5912E 74%,#E5B93C 100%);outline:none;cursor:pointer;margin:0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:7px;background:var(--ink);border:3px solid var(--bg);cursor:grab;box-shadow:0 3px 12px rgba(0,0,0,.6)}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:6px;background:var(--ink);border:3px solid var(--bg);cursor:grab}
+input[type=range]:focus-visible::-webkit-slider-thumb{outline:3px solid var(--amber);outline-offset:2px}
+.ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px}
+.fixed{font-family:var(--mono);font-size:12px;color:var(--muted);margin:14px 0 0;padding-top:12px;border-top:1px dashed var(--line)}
+
+/* 分区 */
+h2{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:34px 0 5px;display:flex;align-items:center;gap:10px}
+h2 .n{font-family:var(--mono);font-size:12px;color:var(--bg);background:var(--amber);width:23px;height:23px;border-radius:7px;display:grid;place-items:center;flex:none}
+.sub{color:var(--muted);font-size:15px;margin:0 0 16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px}
+
+/* 生成结果 */
+.out{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.clause{
+  font-family:var(--mono);font-size:16px;padding:9px 13px;border-radius:9px;
+  background:var(--panel2);border:1px solid transparent;cursor:pointer;
+  display:flex;align-items:center;gap:12px;text-align:left;color:var(--ink);width:100%;
+}
+.clause:hover{border-color:var(--line)}
+.clause.sel{border-color:var(--amber);background:#2E3520}
+.clause .idx{color:var(--muted);font-size:12px;flex:none;width:22px}
+.clause .dup{color:var(--red);font-size:12px;margin-left:auto;flex:none}
+.dupwarn{color:var(--red);font-size:14.5px;margin:0 0 14px;font-weight:700}
+.dupok{color:var(--green);font-size:14.5px;margin:0 0 14px;font-weight:700}
+button{font-family:inherit;font-size:14.5px;font-weight:700;color:var(--bg);background:var(--amber);border:none;border-radius:10px;padding:11px 22px;cursor:pointer}
+button:hover{filter:brightness(1.08)}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+
+/* 计分板 */
+.board{width:100%;border-collapse:collapse;font-size:14.5px}
+.board th{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:left;padding:0 8px 10px;font-weight:700}
+.board td{padding:8px;border-top:1px solid var(--line);vertical-align:middle}
+.board .w{font-weight:700;font-size:16px}
+.board .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.stamp{
+  display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;
+  padding:2px 7px;border-radius:5px;border:1.5px solid var(--red);color:var(--red);
+  transform:rotate(-4deg);letter-spacing:.05em;
+}
+.nostamp{color:var(--muted);font-family:var(--mono);font-size:12px}
+.pen{color:var(--red);font-weight:700}
+.pen.bonus{color:#9B8BD6}
+.pen.zero{color:var(--muted);font-weight:400}
+tr.picked{background:#2E3520}
+tr.picked .w{color:var(--amber)}
+.pbar{height:9px;border-radius:99px;background:var(--panel2);overflow:hidden;min-width:52px}
+.pbar i{display:block;height:100%;background:var(--amber);border-radius:99px}
+
+/* 对比 */
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.vscol{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.vscol h3{margin:0 0 4px;font-size:16px;font-weight:800}
+.vscol .desc{color:var(--muted);font-size:13px;margin:0 0 14px;min-height:38px}
+.vsrow{display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid var(--line);font-size:14px}
+.vsrow .w{font-weight:700;width:38px;flex:none}
+.vsrow .c{font-family:var(--mono);font-size:11.5px;color:var(--muted);flex:none}
+.vsrow .v{font-family:var(--mono);font-weight:700;margin-left:auto;font-variant-numeric:tabular-nums}
+.vscol.pres .v{color:var(--red)}
+.vscol.freq .v{color:#E5B93C}
+
+footer{margin-top:40px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:14.5px}
+footer b{color:var(--ink)}
+code{font-family:var(--mono);font-size:13px;background:var(--panel2);padding:2px 6px;border-radius:5px;color:var(--amber)}
+
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr}
+  .panel{display:contents;position:static;max-height:none;overflow:visible}
+  .head{order:1}
+  .panel .console{order:2}
+  .stage{order:3}
+  .panel footer{order:4;margin-top:36px}
+}
+@media(max-width:640px){
+  .wrap{padding:32px 15px 60px}
+  .vs{grid-template-columns:1fr}
+  .board{font-size:13px}
+  .board td{padding:6px 4px}
+  .clause{font-size:14px}
+}
+@media(prefers-reduced-motion:reduce){*{transition-duration:.01ms !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="layout">
+    <main class="stage">
+
+      <h2><span class="n">1</span>它写出来的东西</h2>
+      <p class="sub">同一个开头写 8 句。拖动右侧滑块，看句子怎么变。</p>
+      <div class="card">
+        <p id="verdict" class="dupok"></p>
+        <div class="out" id="out"></div>
+        <button id="reroll">换个种子重写</button>
+      </div>
+
+      <h2><span class="n">2</span>打卡墙：这一步在扣谁的分</h2>
+      <p class="sub">点上面任意一句，看它被写出来的那一刻，八个候选词各自的处境。</p>
+      <div class="card">
+        <table class="board">
+          <thead><tr><th>候选词</th><th>原始分</th><th>盖章了吗</th><th>惩罚</th><th>最终分</th><th>被选中的概率</th></tr></thead>
+          <tbody id="board"></tbody>
+        </table>
+      </div>
+
+      <h2><span class="n">3</span>跟 Frequency Penalty 的区别</h2>
+      <p class="sub">这是最容易混的一对。基于上面这段文字里各词的实际出现次数来算。</p>
+      <div class="vs">
+        <div class="vscol pres">
+          <h3>Presence Penalty</h3>
+          <p class="desc">出现过就扣，扣一笔。次数完全不影响。</p>
+          <div id="vsPres"></div>
+        </div>
+        <div class="vscol freq">
+          <h3>Frequency Penalty</h3>
+          <p class="desc">出现几次扣几笔。用得越狠，罚得越重。</p>
+          <div id="vsFreq"></div>
+        </div>
+      </div>
+
+    </main>
+
+    <aside class="panel">
+      <header class="head">
+        <p class="eyebrow">Presence Penalty · 出现惩罚</p>
+        <h1>说过的词，<br>要交税</h1>
+        <p class="lede">一个词只要在前面出现过，它的分数就被扣掉固定的一笔。注意"固定"两个字——出现 1 次和出现 10 次，扣得一样多。它只管你有没有露过面，不管你露了几次。</p>
+      </header>
+
+      <div class="console">
+        <div class="pline">
+          <span class="lab">PRESENCE_PENALTY =</span>
+          <span class="num" id="pv">0.00</span>
+          <span class="tag" id="tag">不管重复</span>
+        </div>
+        <input type="range" id="ps" min="-200" max="200" value="0" step="5" aria-label="presence penalty 取值">
+        <div class="ticks"><span>−2.0 鼓励重复</span><span>0 不管</span><span>+2.0 逼它换词</span></div>
+        <p class="fixed">其余参数已锁定：temperature = 0.7，随机种子固定。所以下面文字的变化<b>只可能</b>是这个参数造成的。</p>
+      </div>
+      <p class="side-hint">拖动滑杆，左侧 1–3 三段同步重算</p>
+
+      <footer>
+        <b>公式长这样：</b><code>logit' = logit − presence×(出现过?1:0) − frequency×出现次数</code><br><br>
+        <b>怎么选：</b>想让模型<b>换个话题</b>用 presence（0.3~0.8）；想让模型<b>别把同一个词嚼烂</b>用 frequency（0.3~0.8）。
+        两个都超过 1.0 之后，模型会为了躲开常用词而开始说人话以外的东西——这是副作用，不是创意。
+      </footer>
+    </aside>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var NOUNS = [['海',5.0],['天空',4.2],['山',3.5],['云',2.9],['风',2.3],['树',1.8],['石头',1.3],['小路',0.8]];
+  var ADJS  = [['很蓝',5.0],['很大',4.2],['很安静',3.5],['很温柔',2.9],['很明亮',2.3],['很遥远',1.8],['很苍老',1.3],['很潮湿',0.8]];
+  var TEMP = 0.7, STEPS = 8;
+
+  /* 固定种子随机数：拖滑块时随机性不变，变化全归因于参数 */
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  var seed = 20260811;
+
+  function pick(pool, usedSet, penalty, rnd){
+    var rows = pool.map(function(item){
+      var used = usedSet[item[0]] ? true : false;
+      var pen  = used ? penalty : 0;
+      return {w:item[0], base:item[1], used:used, pen:pen, score:item[1] - pen};
+    });
+    var scaled = rows.map(function(r){ return r.score / TEMP; });
+    var m = Math.max.apply(null, scaled);
+    var ex = scaled.map(function(s){ return Math.exp(s - m); });
+    var sum = ex.reduce(function(a,b){ return a+b; }, 0);
+    rows.forEach(function(r,i){ r.prob = ex[i]/sum; });
+
+    var r = rnd(), acc = 0, idx = rows.length - 1;
+    for(var i=0;i<rows.length;i++){ acc += rows[i].prob; if(r < acc){ idx = i; break; } }
+    rows[idx].picked = true;
+    return {rows:rows, chosen:rows[idx].w};
+  }
+
+  var ps      = document.getElementById('ps');
+  var pv      = document.getElementById('pv');
+  var tag     = document.getElementById('tag');
+  var outEl   = document.getElementById('out');
+  var boardEl = document.getElementById('board');
+  var verdict = document.getElementById('verdict');
+  var vsPres  = document.getElementById('vsPres');
+  var vsFreq  = document.getElementById('vsFreq');
+
+  var snaps = [], selected = 0, counts = {};
+
+  function generate(penalty){
+    var rnd = mulberry32(seed);
+    var usedN = {}, usedA = {};
+    counts = {};
+    snaps = [];
+    for(var i=0;i<STEPS;i++){
+      var n = pick(NOUNS, usedN, penalty, rnd);
+      var a = pick(ADJS,  usedA, penalty, rnd);
+      usedN[n.chosen] = true;
+      usedA[a.chosen] = true;
+      counts[n.chosen] = (counts[n.chosen] || 0) + 1;
+      snaps.push({text:n.chosen + a.chosen + '。', rows:n.rows, chosen:n.chosen});
+    }
+  }
+
+  function label(p){
+    if(p <= -1.0) return '死死抱住同一个词';
+    if(p < -0.05) return '偏爱重复';
+    if(p <= 0.05) return '不管重复';
+    if(p < 0.6)   return '轻轻推一把';
+    if(p < 1.2)   return '明显在赶它换词';
+    return '强行不许重复';
+  }
+
+  function renderOut(){
+    outEl.innerHTML = '';
+    var seen = {}, dup = 0;
+    snaps.forEach(function(s, i){
+      if(seen[s.text]) dup++; else seen[s.text] = true;
+
+      var b = document.createElement('button');
+      b.className = 'clause' + (i === selected ? ' sel' : '');
+      b.type = 'button';
+      b.innerHTML = '<span class="idx">' + (i+1) + '</span><span>' + s.text + '</span>';
+      if(seen[s.text] && dup && s.text && countText(s.text) > 1){
+        var d = document.createElement('span'); d.className='dup'; d.textContent='重复'; b.appendChild(d);
+      }
+      b.addEventListener('click', function(){ selected = i; renderOut(); renderBoard(); });
+      outEl.appendChild(b);
+    });
+
+    var kinds = Object.keys(seen).length;
+    if(kinds <= 2){
+      verdict.className = 'dupwarn';
+      verdict.textContent = '8 句话里只有 ' + kinds + ' 种，卡在原地打转了。';
+    }else if(kinds < STEPS){
+      verdict.className = 'dupwarn';
+      verdict.textContent = '8 句话里有 ' + kinds + ' 种，还有重复。';
+    }else{
+      verdict.className = 'dupok';
+      verdict.textContent = '8 句话全都不一样。';
+    }
+  }
+  function countText(t){
+    return snaps.filter(function(s){ return s.text === t; }).length;
+  }
+
+  function renderBoard(){
+    var snap = snaps[selected];
+    boardEl.innerHTML = '';
+    snap.rows.forEach(function(r){
+      var tr = document.createElement('tr');
+      if(r.picked) tr.className = 'picked';
+
+      var penTxt, penCls;
+      if(!r.used){ penTxt = '—'; penCls = 'zero'; }
+      else if(r.pen > 0){ penTxt = '−' + r.pen.toFixed(2); penCls = ''; }
+      else if(r.pen < 0){ penTxt = '+' + Math.abs(r.pen).toFixed(2); penCls = 'bonus'; }
+      else { penTxt = '0.00'; penCls = 'zero'; }
+
+      tr.innerHTML =
+        '<td class="w">' + r.w + (r.picked ? ' ←' : '') + '</td>' +
+        '<td class="num">' + r.base.toFixed(2) + '</td>' +
+        '<td>' + (r.used ? '<span class="stamp">用过了</span>' : '<span class="nostamp">还没用</span>') + '</td>' +
+        '<td class="num pen ' + penCls + '">' + penTxt + '</td>' +
+        '<td class="num">' + r.score.toFixed(2) + '</td>' +
+        '<td><div class="pbar"><i style="width:' + (r.prob*100).toFixed(1) + '%"></i></div></td>';
+      boardEl.appendChild(tr);
+    });
+  }
+
+  function renderVS(){
+    var p = Math.abs(ps.value / 100) || 0.6;
+    var f = 0.4;
+    var words = Object.keys(counts).sort(function(a,b){ return counts[b] - counts[a]; });
+    vsPres.innerHTML = ''; vsFreq.innerHTML = '';
+
+    words.forEach(function(w){
+      var c = counts[w];
+      var a = document.createElement('div'); a.className='vsrow';
+      a.innerHTML = '<span class="w">' + w + '</span><span class="c">出现 ' + c + ' 次</span>' +
+                    '<span class="v">−' + p.toFixed(2) + '</span>';
+      vsPres.appendChild(a);
+
+      var b = document.createElement('div'); b.className='vsrow';
+      b.innerHTML = '<span class="w">' + w + '</span><span class="c">' + f.toFixed(2) + ' × ' + c + '</span>' +
+                    '<span class="v">−' + (f*c).toFixed(2) + '</span>';
+      vsFreq.appendChild(b);
+    });
+  }
+
+  function render(){
+    var p = ps.value / 100;
+    pv.textContent = (p >= 0 ? '' : '−') + Math.abs(p).toFixed(2);
+    pv.style.color = p < -0.05 ? '#9B8BD6' : (p > 0.05 ? 'var(--amber)' : 'var(--muted)');
+    tag.textContent = label(p);
+    generate(p);
+    if(selected >= snaps.length) selected = 0;
+    renderOut(); renderBoard(); renderVS();
+  }
+
+  var q = false;
+  ps.addEventListener('input', function(){
+    if(q) return; q = true;
+    requestAnimationFrame(function(){ q = false; render(); });
+  });
+  document.getElementById('reroll').addEventListener('click', function(){
+    seed = (Math.random() * 1e9) | 0;
+    selected = 0;
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
