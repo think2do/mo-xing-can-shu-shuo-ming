@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 采样参数可视化演示 · 合集</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    display:flex;
+    flex-direction:column;
+    background:#0B0F16;
+    color:#E8EDF6;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  }
+  .tabs{
+    position:sticky;top:0;z-index:20;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:12px 18px;
+    background:rgba(11,15,22,.92);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .tabs h1{
+    font-size:15px;font-weight:800;margin:0 14px 0 0;letter-spacing:.02em;
+    color:#fff;white-space:nowrap;
+  }
+  .tab-btn{
+    appearance:none;border:1px solid rgba(255,255,255,.14);
+    background:#151B29;color:#B8C4D8;
+    font:inherit;font-size:13.5px;font-weight:700;
+    padding:8px 16px;border-radius:999px;cursor:pointer;
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .tab-btn:hover{background:#1D2637;color:#fff}
+  .tab-btn.active{
+    background:#3FC5F0;border-color:#3FC5F0;color:#0B0F16;
+  }
+  .viewer{flex:1;min-height:0}
+  .tab-panel{display:none;width:100%;height:100%}
+  .tab-panel.active{display:block}
+  iframe{display:block;width:100%;height:100%;border:0;background:#fff}
+  @media(max-width:720px){
+    .tabs h1{width:100%;margin-bottom:2px}
+  }
+</style>
+</head>
+<body>
+  <nav class="tabs" aria-label="演示切换">
+    <h1>AI 采样参数演示</h1>
+    <button class="tab-btn active" type="button" data-tab="temperature">Temperature 温度</button>
+    <button class="tab-btn" type="button" data-tab="topp">Top-P 核采样</button>
+    <button class="tab-btn" type="button" data-tab="frequency">Frequency 频率惩罚</button>
+    <button class="tab-btn" type="button" data-tab="presence">Presence 出现惩罚</button>
+  </nav>
+
+  <main class="viewer">
+    <section class="tab-panel active" id="temperature" role="tabpanel">
+      <iframe src="temperature-demo.html" title="Temperature 温度演示"></iframe>
+    </section>
+    <section class="tab-panel" id="topp" role="tabpanel">
+      <iframe src="topp-demo.html" title="Top-P 核采样演示"></iframe>
+    </section>
+    <section class="tab-panel" id="frequency" role="tabpanel">
+      <iframe src="frequency-penalty-demo.html" title="Frequency Penalty 频率惩罚演示"></iframe>
+    </section>
+    <section class="tab-panel" id="presence" role="tabpanel">
+      <iframe src="presence-penalty-demo.html" title="Presence Penalty 出现惩罚演示"></iframe>
+    </section>
+  </main>
+
+<script>
+(function(){
+  "use strict";
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('.tab-btn'));
+  var panels = {};
+  buttons.forEach(function(btn){
+    var id = btn.getAttribute('data-tab');
+    panels[id] = document.getElementById(id);
+    btn.addEventListener('click', function(){
+      buttons.forEach(function(b){ b.classList.toggle('active', b === btn); });
+      Object.keys(panels).forEach(function(key){
+        panels[key].classList.toggle('active', key === id);
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
