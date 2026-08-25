@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Top-P，一把会自己变长短的刀</title>
+<style>
+:root{
+  --bg:#E9EDF2;
+  --paper:#FFFFFF;
+  --ink:#101620;
+  --muted:#6C7788;
+  --line:#D7DDE5;
+  --blade:#D6003C;
+  --out:#C3C9D2;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:var(--sans);line-height:1.7;-webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1200px;margin:0 auto;padding:32px 22px 64px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:28px;align-items:start}
+.stage{min-width:0}
+.panel{min-width:0;display:flex;flex-direction:column;gap:18px;position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;scrollbar-width:thin;padding-right:4px}
+.panel h1{font-size:clamp(28px,3.4vw,40px)}
+.panel .lede{margin-bottom:0}
+.panel .knife{margin-bottom:0}
+.panel .kbox{margin-bottom:0}
+.panel footer{margin-top:2px}
+.side-hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin:2px 2px 0;text-align:center;letter-spacing:.04em}
+
+.eyebrow{
+  font-family:var(--mono);font-size:12px;letter-spacing:.22em;
+  color:var(--blade);text-transform:uppercase;margin:0 0 12px;font-weight:700;
+}
+h1{font-size:clamp(32px,6.2vw,54px);font-weight:800;letter-spacing:-.035em;line-height:1.08;margin:0 0 14px}
+.lede{color:var(--muted);font-size:17px;margin:0 0 38px;max-width:56ch}
+
+/* ---- 刀 ---- */
+.knife{
+  background:var(--paper);border:1px solid var(--line);border-radius:18px;
+  padding:26px 26px 20px;margin-bottom:16px;box-shadow:0 12px 32px -22px rgba(16,22,32,.5);
+}
+.pline{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.pline .lab{font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:.1em}
+.pline .num{
+  font-family:var(--mono);font-size:clamp(38px,8vw,56px);font-weight:700;
+  letter-spacing:-.04em;line-height:1;color:var(--blade);font-variant-numeric:tabular-nums;
+}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:99px;
+  background:linear-gradient(90deg,var(--blade) 0%,#E88AA5 55%,#DDE2EA 100%);
+  outline:none;cursor:pointer;margin:0;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:40px;border-radius:4px;background:var(--blade);
+  border:2px solid var(--paper);cursor:grab;box-shadow:0 3px 10px rgba(214,0,60,.45);
+}
+input[type=range]::-moz-range-thumb{
+  width:14px;height:40px;border-radius:4px;background:var(--blade);
+  border:2px solid var(--paper);cursor:grab;
+}
+input[type=range]:focus-visible::-webkit-slider-thumb{outline:3px solid var(--ink);outline-offset:2px}
+.ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px}
+.hint{
+  margin:0 0 34px;font-size:14.5px;color:var(--muted);
+  padding-left:14px;border-left:3px solid var(--blade);
+}
+
+/* ---- 场景 ---- */
+.scene{
+  background:var(--paper);border:1px solid var(--line);border-radius:16px;
+  padding:22px 22px 18px;margin-bottom:14px;
+}
+.scene-top{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.scene-q{font-size:18px;font-weight:700;letter-spacing:-.01em}
+.scene-q .u{color:var(--blade);border-bottom:3px solid var(--blade);padding:0 16px}
+.scene-tag{font-size:12.5px;color:var(--muted);font-family:var(--mono);letter-spacing:.06em;display:block;margin-top:3px}
+.alive{text-align:right;flex:none}
+.alive .n{font-family:var(--mono);font-size:34px;font-weight:700;line-height:1;letter-spacing:-.03em}
+.alive .t{font-size:12px;color:var(--muted);display:block;margin-top:2px}
+
+/* 累积条 */
+.stack{position:relative;height:44px;border-radius:8px;overflow:hidden;display:flex;background:#F2F4F8;margin-bottom:6px}
+.seg{height:100%;position:relative;transition:background-color .2s}
+.seg span{
+  position:absolute;inset:0;display:grid;place-items:center;font-size:12.5px;font-weight:700;
+  color:#fff;white-space:nowrap;overflow:hidden;
+}
+.seg.out span{color:#8A929E}
+.bladeline{
+  position:absolute;top:-5px;bottom:-5px;width:3px;background:var(--blade);
+  transition:left .12s ease-out;pointer-events:none;z-index:5;
+}
+.bladeline::after{
+  content:'';position:absolute;top:-6px;left:-4.5px;
+  border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid var(--blade);
+}
+.axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px}
+
+/* 候选牌 */
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{
+  display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:9px;
+  font-size:14px;border:1px solid var(--line);background:#F7F9FB;
+}
+.chip.in{border-color:#0F3D6E;background:#EAF2FA}
+.chip.out{opacity:.5}
+.chip.out .w{text-decoration:line-through}
+.chip .w{font-weight:700}
+.chip .p{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.chip.in .p{color:#0F3D6E}
+.chip .arrow{color:var(--muted);font-size:11px}
+
+/* ---- 对比 ---- */
+h2{font-size:22px;font-weight:800;letter-spacing:-.02em;margin:38px 0 6px}
+.sub{color:var(--muted);font-size:15px;margin:0 0 18px}
+table{width:100%;border-collapse:collapse;background:var(--paper);border-radius:14px;overflow:hidden;font-size:15px}
+th,td{padding:13px 14px;text-align:left;border-bottom:1px solid var(--line)}
+th{background:#DFE5EC;font-size:12.5px;letter-spacing:.06em;color:var(--muted);font-family:var(--mono);text-transform:uppercase}
+tr:last-child td{border-bottom:none}
+td .big{font-family:var(--mono);font-weight:700;font-size:17px}
+.good{color:#12693F}
+.bad{color:var(--blade)}
+.kbox{display:flex;align-items:center;gap:14px;margin:0 0 16px;flex-wrap:wrap}
+.kbox label{font-size:14px;font-weight:700}
+.kbox input[type=range]{width:180px;height:6px;background:#C3C9D2}
+.kbox input[type=range]::-webkit-slider-thumb{width:22px;height:22px;border-radius:50%;background:var(--ink);box-shadow:none}
+.kbox .kv{font-family:var(--mono);font-weight:700;font-size:18px}
+
+footer{margin-top:44px;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:14.5px}
+footer b{color:var(--ink)}
+
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr}
+  .panel{display:contents;position:static;max-height:none;overflow:visible}
+  .head{order:1}
+  .panel .knife{order:2}
+  .panel .kbox{order:3}
+  .stage{order:4}
+  .panel footer{order:5;margin-top:36px}
+}
+@media(max-width:620px){
+  .wrap{padding:32px 15px 60px}
+  .seg span{font-size:11px}
+  .alive .n{font-size:28px}
+  table{font-size:13.5px}
+  th,td{padding:10px 9px}
+}
+@media(prefers-reduced-motion:reduce){*{transition-duration:.01ms !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="layout">
+    <main class="stage">
+
+      <p class="hint">拖动右边这把刀，三个场景同时被切。注意看右上角的"存活"数字——它们的变化速度完全不一样。</p>
+
+      <div id="scenes"></div>
+
+      <h2>那 Top-K 呢？</h2>
+      <p class="sub">Top-K 是"不管三七二十一，只留前 K 名"——一把长度固定的刀。看看它在三个场景里的表现。</p>
+      <table>
+        <thead><tr><th>场景</th><th>Top-P 留下</th><th>Top-K 留下</th><th>Top-K 的问题</th></tr></thead>
+        <tbody id="cmp"></tbody>
+      </table>
+
+    </main>
+
+    <aside class="panel">
+      <header class="head">
+        <p class="eyebrow">Top-P · 核采样</p>
+        <h1>一把会自己<br>变长短的刀</h1>
+        <p class="lede">把候选词从高到低排好队，从头开始累加概率，加满 p 就一刀切下去。后面的通通淘汰。妙处在于：同样一把刀，AI 有把握时只留 1 个，没把握时留一大群。</p>
+      </header>
+
+      <div class="knife">
+        <div class="pline">
+          <span class="lab">TOP-P =</span>
+          <span class="num" id="pval">0.90</span>
+          <span class="lab" id="pdesc">留下最靠谱的九成</span>
+        </div>
+        <input type="range" id="pslider" min="5" max="100" value="90" step="1" aria-label="top-p 取值">
+        <div class="ticks"><span>0.05 只留冠军</span><span>0.50</span><span>1.00 谁都不淘汰</span></div>
+      </div>
+
+      <div class="kbox">
+        <label for="kslider">Top-K =</label>
+        <input type="range" id="kslider" min="1" max="8" value="3" step="1" aria-label="top-k 取值">
+        <span class="kv" id="kval">3</span>
+      </div>
+
+      <p class="side-hint">两把刀都在右侧，左侧场景和对比表同步更新</p>
+
+      <footer>
+        <b>一句话结论：</b>Top-P 会看模型自己有多确定来决定留几个，Top-K 不会。
+        所以生产环境里默认用 top-p（0.9 ~ 0.95），需要严格封口时再叠加一个 top-k 兜底。
+        另外——<b>temperature 和 top-p 别同时大改</b>，两个变量一起动，出了问题你分不清是谁的锅。
+      </footer>
+    </aside>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* 三个场景：故意做成三种不同的"确定程度" */
+  var SCENES = [
+    {
+      q:'中国的首都是', tag:'模型非常确定 · 尖锐分布',
+      cands:[['北京',95.2],['上海',1.8],['中国',1.0],['南京',0.7],['西安',0.5],['北平',0.4],['广州',0.3],['月亮',0.1]]
+    },
+    {
+      q:'我今天中午想吃', tag:'有偏好但不唯一 · 中等分布',
+      cands:[['面',27],['火锅',20],['米饭',15],['饺子',12],['汉堡',9],['寿司',7],['沙拉',6],['石头',4]]
+    },
+    {
+      q:'从前有一座', tag:'怎么写都行 · 平坦分布',
+      cands:[['山',19],['城堡',15],['小岛',13],['森林',12],['木屋',11],['火山',10],['冰川',10],['桥',10]]
+    }
+  ];
+
+  /* 存活候选的配色：越靠前越深，形成一个"核" */
+  var CORE = ['#0B2545','#12395F','#1A4E79','#246C9B','#3A8BB8','#5FA6CC','#88BEDC','#AED4E9'];
+
+  var pslider = document.getElementById('pslider');
+  var pval    = document.getElementById('pval');
+  var pdesc   = document.getElementById('pdesc');
+  var kslider = document.getElementById('kslider');
+  var kval    = document.getElementById('kval');
+  var cmpBody = document.getElementById('cmp');
+  var scenesEl= document.getElementById('scenes');
+
+  /* 归一化 + 排序 */
+  SCENES.forEach(function(s){
+    var sum = s.cands.reduce(function(a,c){ return a + c[1]; }, 0);
+    s.probs = s.cands.map(function(c){ return {w:c[0], p:c[1]/sum}; })
+                     .sort(function(a,b){ return b.p - a.p; });
+  });
+
+  /* 建 DOM（只建一次，之后改属性） */
+  var views = SCENES.map(function(s){
+    var box = document.createElement('div'); box.className='scene';
+
+    var top = document.createElement('div'); top.className='scene-top';
+    var q = document.createElement('div'); q.className='scene-q';
+    q.innerHTML = s.q + '<span class="u">?</span><span class="scene-tag">' + s.tag + '</span>';
+    var alive = document.createElement('div'); alive.className='alive';
+    var an = document.createElement('div'); an.className='n';
+    var at = document.createElement('span'); at.className='t'; at.textContent='个候选存活';
+    alive.appendChild(an); alive.appendChild(at);
+    top.appendChild(q); top.appendChild(alive);
+
+    var stack = document.createElement('div'); stack.className='stack';
+    var segs = s.probs.map(function(c){
+      var d = document.createElement('div'); d.className='seg';
+      d.style.width = (c.p*100)+'%';
+      var t = document.createElement('span'); t.textContent = c.w;
+      d.appendChild(t); stack.appendChild(d);
+      return d;
+    });
+    var blade = document.createElement('div'); blade.className='bladeline';
+    stack.appendChild(blade);
+
+    var axis = document.createElement('div'); axis.className='axis';
+    axis.innerHTML = '<span>累积 0%</span><span>50%</span><span>100%</span>';
+
+    var chips = document.createElement('div'); chips.className='chips';
+    var chipEls = s.probs.map(function(c){
+      var ch = document.createElement('div'); ch.className='chip';
+      ch.innerHTML = '<span class="w"></span><span class="p o"></span>'
+                   + '<span class="arrow">→</span><span class="p n"></span>';
+      ch.querySelector('.w').textContent = c.w;
+      ch.querySelector('.p.o').textContent = (c.p*100).toFixed(1)+'%';
+      chips.appendChild(ch);
+      return ch;
+    });
+
+    box.appendChild(top); box.appendChild(stack); box.appendChild(axis); box.appendChild(chips);
+    scenesEl.appendChild(box);
+    return {segs:segs, blade:blade, chips:chipEls, alive:an};
+  });
+
+  /* 核心算法：排序 → 累加 → 到达 p 时收刀（压线的那个算留下） */
+  function nucleus(probs, p){
+    var acc = 0, keep = 0;
+    for(var i=0;i<probs.length;i++){
+      acc += probs[i].p;
+      keep = i + 1;
+      if(acc >= p) break;
+    }
+    return {keep:keep, mass:acc};
+  }
+
+  function render(){
+    var p = pslider.value / 100;
+    pval.textContent = p.toFixed(2);
+    pdesc.textContent = p >= 0.995 ? '不淘汰任何人'
+                      : p <= 0.2   ? '几乎只留冠军'
+                      : '留下最靠谱的 ' + Math.round(p*100) + '%';
+
+    SCENES.forEach(function(s, si){
+      var r = nucleus(s.probs, p);
+      var v = views[si];
+      v.alive.textContent = r.keep;
+      v.blade.style.left = (p*100) + '%';
+
+      s.probs.forEach(function(c, i){
+        var inSet = i < r.keep;
+        v.segs[i].style.backgroundColor = inSet ? CORE[Math.min(i, CORE.length-1)] : 'var(--out)';
+        v.segs[i].className = 'seg' + (inSet ? '' : ' out');
+        v.chips[i].className = 'chip ' + (inSet ? 'in' : 'out');
+        // 重新分蛋糕：存活者的概率按比例放大
+        v.chips[i].querySelector('.p.n').textContent =
+          inSet ? (c.p / r.mass * 100).toFixed(1) + '%' : '0%';
+      });
+    });
+
+    renderCmp();
+  }
+
+  function renderCmp(){
+    var p = pslider.value / 100;
+    var k = parseInt(kslider.value, 10);
+    kval.textContent = k;
+    cmpBody.innerHTML = '';
+
+    SCENES.forEach(function(s){
+      var np = nucleus(s.probs, p).keep;
+      var nk = Math.min(k, s.probs.length);
+
+      var issue, cls;
+      if(nk > np + 1){
+        issue = '硬塞进 ' + (nk-np) + ' 个不该出现的词，比如"' + s.probs[nk-1].w + '"';
+        cls = 'bad';
+      }else if(nk < np - 1){
+        issue = '砍掉了 ' + (np-nk) + ' 个本来挺合适的词，输出会变单调';
+        cls = 'bad';
+      }else{
+        issue = '这次刚好差不多';
+        cls = 'good';
+      }
+
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + s.q + '…</td>' +
+        '<td><span class="big">' + np + '</span> 个</td>' +
+        '<td><span class="big">' + nk + '</span> 个</td>' +
+        '<td class="' + cls + '">' + issue + '</td>';
+      cmpBody.appendChild(tr);
+    });
+  }
+
+  var queued = false;
+  function schedule(){
+    if(queued) return;
+    queued = true;
+    requestAnimationFrame(function(){ queued = false; render(); });
+  }
+  pslider.addEventListener('input', schedule);
+  kslider.addEventListener('input', schedule);
+
+  render();
+})();
+</script>
+</body>
+</html>
