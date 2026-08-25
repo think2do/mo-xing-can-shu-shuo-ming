@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>温度值，一拖就懂</title>
+<style>
+:root{
+  --bg:#0C1018;
+  --panel:#151B29;
+  --panel-2:#1B2333;
+  --line:#28324a;
+  --ink:#EEF2FA;
+  --muted:#7E8CA8;
+  --cold:#3FC5F0;
+  --hot:#FF5A24;
+  --glow:var(--cold);
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:0;background:var(--bg);color:var(--ink);
+  font-family:var(--sans);line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1200px;margin:0 auto;padding:32px 22px 64px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:28px;align-items:start}
+.stage{min-width:0}
+.panel{min-width:0;display:flex;flex-direction:column;gap:18px;position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;scrollbar-width:thin;padding-right:4px}
+.panel h1{font-size:clamp(28px,3.4vw,40px)}
+.panel .lede{margin-bottom:0}
+.panel .thermo{margin-bottom:0;flex:none}
+.panel footer{margin-top:2px}
+.side-hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin:2px 2px 0;text-align:center;letter-spacing:.04em}
+
+/* ---------- 头 ---------- */
+.eyebrow{
+  font-family:var(--mono);font-size:12px;letter-spacing:.22em;
+  color:var(--muted);text-transform:uppercase;margin:0 0 14px
+}
+h1{
+  font-size:clamp(34px,6.5vw,58px);font-weight:800;letter-spacing:-.03em;
+  line-height:1.08;margin:0 0 14px
+}
+h1 em{font-style:normal;color:var(--glow);transition:color .25s}
+.lede{color:var(--muted);font-size:17px;margin:0 0 44px;max-width:52ch}
+
+/* ---------- 温度计 ---------- */
+.thermo{
+  background:var(--panel);border:1px solid var(--line);border-radius:20px;
+  padding:28px 28px 22px;margin-bottom:34px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.02), 0 24px 60px -30px var(--glow);
+  transition:box-shadow .25s;
+}
+.readout{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.readout .num{
+  font-family:var(--mono);font-size:clamp(44px,9vw,68px);font-weight:700;
+  letter-spacing:-.04em;line-height:1;color:var(--glow);transition:color .25s;
+  font-variant-numeric:tabular-nums;
+}
+.readout .mood{
+  font-size:15px;font-weight:700;padding:6px 14px;border-radius:999px;
+  background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:16px;border-radius:999px;
+  background:linear-gradient(90deg,#2C7FA8 0%,#3FC5F0 18%,#F0F4F8 46%,#FFB020 72%,#FF5A24 100%);
+  outline:none;cursor:pointer;margin:0;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:34px;height:34px;border-radius:50%;
+  background:#fff;border:4px solid var(--glow);cursor:grab;
+  box-shadow:0 4px 16px rgba(0,0,0,.5);transition:border-color .25s;
+}
+input[type=range]::-moz-range-thumb{
+  width:30px;height:30px;border-radius:50%;background:#fff;
+  border:4px solid var(--glow);cursor:grab;box-shadow:0 4px 16px rgba(0,0,0,.5);
+}
+input[type=range]:focus-visible::-webkit-slider-thumb{outline:3px solid #fff;outline-offset:3px}
+.scale{
+  display:flex;justify-content:space-between;font-family:var(--mono);
+  font-size:12px;color:var(--muted);margin-top:12px;letter-spacing:.05em
+}
+
+/* ---------- 分区 ---------- */
+.step{margin-bottom:38px}
+.step-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.step-num{
+  font-family:var(--mono);font-size:12px;font-weight:700;color:var(--bg);
+  background:var(--glow);width:24px;height:24px;border-radius:7px;
+  display:grid;place-items:center;flex:none;transition:background .25s;
+}
+h2{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0}
+.note{color:var(--muted);font-size:15px;margin:0 0 18px 36px}
+.card{
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:18px;padding:24px;
+}
+
+/* ---------- 概率条 ---------- */
+.prompt{
+  font-size:19px;font-weight:600;margin-bottom:20px;
+  padding-bottom:16px;border-bottom:1px dashed var(--line);
+}
+.prompt .blank{
+  color:var(--glow);border-bottom:3px solid var(--glow);
+  padding:0 22px;transition:color .25s,border-color .25s;
+}
+.bar-row{display:flex;align-items:center;gap:14px;margin-bottom:11px}
+.bar-word{
+  width:44px;text-align:right;font-size:17px;font-weight:700;flex:none;
+}
+.bar-track{flex:1;height:26px;background:var(--panel-2);border-radius:7px;overflow:hidden}
+.bar-fill{height:100%;border-radius:7px;transition:width .18s ease-out}
+.bar-pct{
+  width:62px;font-family:var(--mono);font-size:14px;color:var(--muted);
+  flex:none;font-variant-numeric:tabular-nums;
+}
+
+/* ---------- 100 格 ---------- */
+.grid{
+  display:grid;grid-template-columns:repeat(20,1fr);gap:5px;margin-bottom:20px;
+}
+.cell{
+  aspect-ratio:1;border-radius:4px;
+  transition:background-color .3s ease, transform .3s ease;
+}
+.tally{display:flex;flex-wrap:wrap;gap:8px 16px;padding-top:18px;border-top:1px dashed var(--line)}
+.tally-item{display:flex;align-items:center;gap:7px;font-size:14px}
+.dot{width:11px;height:11px;border-radius:3px;flex:none}
+.tally-item .n{font-family:var(--mono);color:var(--muted)}
+.verdict{
+  margin-top:18px;padding:14px 16px;border-radius:12px;
+  background:var(--panel-2);border-left:3px solid var(--glow);
+  font-size:15px;transition:border-color .25s;
+}
+.verdict b{color:var(--glow);transition:color .25s}
+
+/* ---------- 造句 ---------- */
+.sentences{display:flex;flex-direction:column;gap:10px;margin-bottom:20px}
+.sentence{
+  padding:13px 16px;background:var(--panel-2);border-radius:11px;
+  font-size:16px;border:1px solid transparent;
+}
+.sentence .pick{font-weight:700}
+button{
+  font-family:inherit;font-size:15px;font-weight:700;color:var(--bg);
+  background:var(--glow);border:none;border-radius:11px;
+  padding:12px 26px;cursor:pointer;transition:background .25s,transform .1s;
+}
+button:hover{filter:brightness(1.1)}
+button:active{transform:translateY(1px)}
+button:focus-visible{outline:3px solid #fff;outline-offset:3px}
+
+footer{
+  margin-top:56px;padding-top:26px;border-top:1px solid var(--line);
+  color:var(--muted);font-size:14px;
+}
+footer b{color:var(--ink)}
+
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr}
+  .panel{display:contents;position:static;max-height:none;overflow:visible}
+  .head{order:1}
+  .panel .thermo{order:2}
+  .stage{order:3}
+  .panel footer{order:4;margin-top:36px}
+}
+@media(max-width:640px){
+  .wrap{padding:32px 16px 60px}
+  .grid{grid-template-columns:repeat(10,1fr)}
+  .note{margin-left:0}
+  .bar-word{width:38px;font-size:15px}
+  .bar-pct{width:52px;font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="layout">
+    <main class="stage">
+
+      <!-- ① -->
+      <section class="step">
+        <div class="step-head"><span class="step-num">1</span><h2>AI 心里在想什么</h2></div>
+        <p class="note">条子越长，表示 AI 越想选这个词。温度只改变长短，不改变谁排第一。</p>
+        <div class="card">
+          <div class="prompt">今天天气真<span class="blank">?</span></div>
+          <div id="bars"></div>
+        </div>
+      </section>
+
+      <!-- ② -->
+      <section class="step">
+        <div class="step-head"><span class="step-num">2</span><h2>同样的问题，问它 100 次</h2></div>
+        <p class="note">每个小方块 = 问一次得到的答案。整齐还是花花绿绿，一眼就看出来了。</p>
+        <div class="card">
+          <div class="grid" id="grid"></div>
+          <div class="tally" id="tally"></div>
+          <div class="verdict" id="verdict"></div>
+        </div>
+      </section>
+
+      <!-- ③ -->
+      <section class="step">
+        <div class="step-head"><span class="step-num">3</span><h2>让它写句子试试</h2></div>
+        <p class="note">同一个开头，写四遍。看看四句话像不像。</p>
+        <div class="card">
+          <div class="sentences" id="sentences"></div>
+          <button id="regen">再写四遍</button>
+        </div>
+      </section>
+
+    </main>
+
+    <aside class="panel">
+      <header class="head">
+        <p class="eyebrow">AI 的一个小旋钮</p>
+        <h1>温度值<br>拖一拖，<em id="h1word">就懂了</em></h1>
+        <p class="lede">AI 每写一个字之前，脑子里都有一堆备选。温度值决定它是老老实实选最喜欢的那个，还是敢赌一把。</p>
+      </header>
+
+      <!-- 温度计 -->
+      <div class="thermo" id="thermo">
+        <div class="readout">
+          <span class="num" id="tval">0.70</span>
+          <span class="mood" id="mood">正常发挥</span>
+        </div>
+        <input type="range" id="slider" min="1" max="200" value="70" step="1"
+               aria-label="温度值">
+        <div class="scale">
+          <span>0.01　死心眼</span><span>1.00　正常</span><span>2.00　胡言乱语</span>
+        </div>
+      </div>
+      <p class="side-hint">拖动滑杆，左侧 1–3 三段同步重算</p>
+
+      <footer>
+        <b>记住一件事：</b>温度调高<b>不会</b>让 AI 变聪明，只会让它更敢乱说。
+        做数学题、写代码就调低；编故事、想点子才调高。
+      </footer>
+    </aside>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ===== 数据 ===== */
+  // logit = AI 心里给每个词打的原始分数
+  const CAND = [
+    {w:'好',   l:4.2, c:'#FFD166'},
+    {w:'热',   l:3.5, c:'#FF7A45'},
+    {w:'不错', l:2.8, c:'#06D6A0'},
+    {w:'怪',   l:1.9, c:'#C77DFF'},
+    {w:'冷',   l:1.5, c:'#3FC5F0'},
+    {w:'蓝',   l:0.6, c:'#5C7CFA'},
+    {w:'香',   l:-0.5,c:'#FF477E'}
+  ];
+
+  const SLOTS = [
+    {pre:'从前有一座山，山里有一只', opts:[
+      ['小狐狸',4.0],['老虎',3.3],['兔子',3.0],['会说话的乌龟',1.5],['穿西装的企鹅',0.2],['路由器',-1.2]]},
+    {pre:'，它每天都在', opts:[
+      ['睡觉',3.8],['找吃的',3.4],['唱歌',2.6],['数星星',1.8],['打乒乓球',0.6],['写代码',-0.8]]},
+    {pre:'，还背着一个', opts:[
+      ['小背包',3.9],['竹篮子',3.2],['破草帽',2.7],['望远镜',1.7],['保温杯',0.5],['显微镜',-1.0]]}
+  ];
+
+  /* ===== 数学 ===== */
+  function softmax(logits, T){
+    const t = Math.max(T, 0.01);
+    const s = logits.map(function(l){ return l/t; });
+    const m = Math.max.apply(null, s);
+    const e = s.map(function(v){ return Math.exp(v-m); });
+    const sum = e.reduce(function(a,b){ return a+b; }, 0);
+    return e.map(function(v){ return v/sum; });
+  }
+  function sample(probs){
+    let r = Math.random(), acc = 0;
+    for(let i=0;i<probs.length;i++){ acc += probs[i]; if(r < acc) return i; }
+    return probs.length-1;
+  }
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function hex2rgb(h){
+    return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+  }
+  function mix(h1,h2,t){
+    const a=hex2rgb(h1), b=hex2rgb(h2);
+    return 'rgb('+Math.round(lerp(a[0],b[0],t))+','+Math.round(lerp(a[1],b[1],t))+','+Math.round(lerp(a[2],b[2],t))+')';
+  }
+
+  /* ===== DOM ===== */
+  const slider   = document.getElementById('slider');
+  const tvalEl   = document.getElementById('tval');
+  const moodEl   = document.getElementById('mood');
+  const barsEl   = document.getElementById('bars');
+  const gridEl   = document.getElementById('grid');
+  const tallyEl  = document.getElementById('tally');
+  const verdictEl= document.getElementById('verdict');
+  const sentEl   = document.getElementById('sentences');
+  const regenBtn = document.getElementById('regen');
+  const h1word   = document.getElementById('h1word');
+
+  // 一次性建好 DOM，之后只改属性，保证拖动丝滑
+  const barRows = CAND.map(function(c){
+    const row = document.createElement('div'); row.className='bar-row';
+    const w = document.createElement('div'); w.className='bar-word'; w.textContent=c.w;
+    const track = document.createElement('div'); track.className='bar-track';
+    const fill = document.createElement('div'); fill.className='bar-fill'; fill.style.background=c.c;
+    const pct = document.createElement('div'); pct.className='bar-pct';
+    track.appendChild(fill); row.appendChild(w); row.appendChild(track); row.appendChild(pct);
+    barsEl.appendChild(row);
+    return {fill:fill, pct:pct};
+  });
+
+  const cells = [];
+  for(let i=0;i<100;i++){
+    const d = document.createElement('div'); d.className='cell';
+    gridEl.appendChild(d); cells.push(d);
+  }
+
+  function mood(T){
+    if(T < 0.2)  return '死心眼';
+    if(T < 0.6)  return '很谨慎';
+    if(T < 1.05) return '正常发挥';
+    if(T < 1.5)  return '爱冒险';
+    return '开始胡言乱语';
+  }
+
+  /* ===== 主渲染 ===== */
+  function render(){
+    const T = slider.value / 100;
+
+    // 页面色温：冷蓝 → 炽橙
+    const heat = Math.min(1, Math.max(0, (T - 0.1) / 1.6));
+    const glow = mix('#3FC5F0','#FF5A24', heat);
+    document.documentElement.style.setProperty('--glow', glow);
+
+    tvalEl.textContent = T.toFixed(2);
+    moodEl.textContent = mood(T);
+    h1word.textContent = T < 0.5 ? '就懂了' : (T < 1.2 ? '试试看' : '别乱来');
+
+    // ① 概率条
+    const probs = softmax(CAND.map(function(c){return c.l;}), T);
+    probs.forEach(function(p,i){
+      barRows[i].fill.style.width = (p*100).toFixed(2)+'%';
+      barRows[i].pct.textContent  = (p*100).toFixed(1)+'%';
+    });
+
+    // ② 100 次采样
+    const counts = new Array(CAND.length).fill(0);
+    for(let i=0;i<100;i++){
+      const k = sample(probs);
+      counts[k]++;
+      cells[i].style.backgroundColor = CAND[k].c;
+    }
+
+    // 统计表
+    tallyEl.innerHTML = '';
+    let kinds = 0;
+    counts.forEach(function(n,i){
+      if(n === 0) return;
+      kinds++;
+      const item = document.createElement('div'); item.className='tally-item';
+      const dot = document.createElement('span'); dot.className='dot'; dot.style.background=CAND[i].c;
+      const txt = document.createElement('span'); txt.textContent = CAND[i].w;
+      const num = document.createElement('span'); num.className='n'; num.textContent = n+'次';
+      item.appendChild(dot); item.appendChild(txt); item.appendChild(num);
+      tallyEl.appendChild(item);
+    });
+
+    let msg;
+    if(kinds === 1)      msg = '100 次答案<b>一模一样</b>。可靠，但也没什么惊喜。';
+    else if(kinds <= 2)  msg = '出现了 <b>'+kinds+' 种</b>答案，基本还是很稳。';
+    else if(kinds <= 4)  msg = '出现了 <b>'+kinds+' 种</b>答案，开始有变化了。';
+    else                 msg = '出现了 <b>'+kinds+' 种</b>答案，连"香"这种奇怪的词都冒出来了。';
+    verdictEl.innerHTML = msg;
+  }
+
+  /* ===== ③ 造句 ===== */
+  function writeSentences(){
+    const T = slider.value / 100;
+    sentEl.innerHTML = '';
+    for(let n=0;n<4;n++){
+      const line = document.createElement('div'); line.className='sentence';
+      SLOTS.forEach(function(slot){
+        line.appendChild(document.createTextNode(slot.pre));
+        const p = softmax(slot.opts.map(function(o){return o[1];}), T);
+        const k = sample(p);
+        const em = document.createElement('span');
+        em.className='pick';
+        em.style.color = 'var(--glow)';
+        em.textContent = slot.opts[k][0];
+        line.appendChild(em);
+      });
+      line.appendChild(document.createTextNode('。'));
+      sentEl.appendChild(line);
+    }
+  }
+
+  /* ===== 绑定 ===== */
+  let queued = false;
+  slider.addEventListener('input', function(){
+    if(queued) return;
+    queued = true;
+    requestAnimationFrame(function(){ queued = false; render(); });
+  });
+  slider.addEventListener('change', writeSentences);
+  regenBtn.addEventListener('click', writeSentences);
+
+  render();
+  writeSentences();
+})();
+</script>
+</body>
+</html>
