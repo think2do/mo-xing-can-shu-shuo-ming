@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frequency Penalty · 用得越多，罚得越狠</title>
+<style>
+:root{
+  --bg:#17111E;
+  --panel:#211829;
+  --panel2:#2C2137;
+  --line:#3D2F4B;
+  --ink:#F0E8F5;
+  --muted:#9C88AA;
+  --mint:#3FD6A0;
+  --gold:#F5C542;
+  --blue:#7CA8F0;
+  --pink:#F2589B;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.7;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1160px;margin:0 auto;padding:44px 22px 80px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:28px;align-items:start}
+.stage{min-width:0}
+.panel{min-width:0;display:flex;flex-direction:column;gap:18px}
+.panel .console{position:sticky;top:20px;margin-bottom:0;box-shadow:0 12px 36px rgba(0,0,0,.38)}
+.side-hint{font-family:var(--mono);font-size:12px;color:var(--muted);margin:2px 2px 0;text-align:center;letter-spacing:.04em}
+.panel h1{font-size:clamp(28px,3.4vw,40px)}
+.panel .lede{margin-bottom:0}
+.panel footer{margin-top:2px}
+.panel .pair{grid-template-columns:1fr}
+
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;color:var(--mint);text-transform:uppercase;margin:0 0 12px;font-weight:700}
+h1{font-size:clamp(32px,6.2vw,54px);font-weight:800;letter-spacing:-.035em;line-height:1.08;margin:0 0 14px}
+.lede{color:var(--muted);font-size:17px;margin:0 0 34px;max-width:56ch}
+
+/* 控制台 */
+.console{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px 24px 18px;margin-bottom:14px}
+.pline{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.pline .lab{font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:.1em}
+.pline .num{font-family:var(--mono);font-size:clamp(38px,8vw,54px);font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--mint);font-variant-numeric:tabular-nums;transition:color .2s}
+.pline .tag{font-size:14px;font-weight:700;padding:5px 13px;border-radius:99px;background:var(--panel2);border:1px solid var(--line)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:99px;background:linear-gradient(90deg,#5E5590 0%,#43384F 42%,#43384F 52%,#2A9E77 74%,#3FD6A0 100%);outline:none;cursor:pointer;margin:0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:99px;background:var(--ink);border:3px solid var(--bg);cursor:grab;box-shadow:0 3px 12px rgba(0,0,0,.6)}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:99px;background:var(--ink);border:3px solid var(--bg);cursor:grab}
+input[type=range]:focus-visible::-webkit-slider-thumb{outline:3px solid var(--mint);outline-offset:2px}
+.ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px}
+.fixed{font-family:var(--mono);font-size:12px;color:var(--muted);margin:14px 0 0;padding-top:12px;border-top:1px dashed var(--line)}
+
+h2{font-size:21px;font-weight:800;letter-spacing:-.02em;margin:34px 0 5px;display:flex;align-items:center;gap:10px}
+h2 .n{font-family:var(--mono);font-size:12px;color:var(--bg);background:var(--mint);width:23px;height:23px;border-radius:99px;display:grid;place-items:center;flex:none}
+.sub{color:var(--muted);font-size:15px;margin:0 0 16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px}
+
+/* 词流 */
+.stream{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+.tok{
+  font-family:var(--mono);font-size:16px;font-weight:700;padding:7px 13px;border-radius:9px;
+  background:var(--panel2);border:1.5px solid transparent;position:relative;
+}
+.tok .sup{font-size:10px;color:var(--pink);vertical-align:super;margin-left:3px;font-weight:700}
+.tok.hot{border-color:var(--pink)}
+.summary{font-size:15px;font-weight:700;margin:0 0 14px}
+.summary.bad{color:var(--pink)}
+.summary.ok{color:var(--mint)}
+button{font-family:inherit;font-size:14.5px;font-weight:700;color:var(--bg);background:var(--mint);border:none;border-radius:10px;padding:11px 22px;cursor:pointer}
+button:hover{filter:brightness(1.08)}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+
+/* 图 */
+.chart-wrap{overflow-x:auto}
+svg.chart{display:block;width:100%;min-width:520px;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.lg{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.lg .sw{width:22px;height:3px;border-radius:2px;flex:none}
+.lg .sw.dash{background:none;border-top:3px dashed var(--muted)}
+
+/* 账单 */
+.bill{display:flex;flex-direction:column;gap:11px}
+.bill-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.bill-w{font-size:17px;font-weight:700;width:44px;flex:none}
+.blocks{display:flex;gap:3px;flex:1;min-width:110px}
+.blk{height:22px;flex:0 0 22px;border-radius:5px;background:var(--pink);opacity:.85}
+.blk.ghost{background:var(--panel2);opacity:1}
+.bill-calc{font-family:var(--mono);font-size:13px;color:var(--muted);flex:none}
+.bill-tot{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--pink);width:64px;text-align:right;flex:none;font-variant-numeric:tabular-nums}
+
+footer{margin-top:40px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:14.5px}
+footer b{color:var(--ink)}
+code{font-family:var(--mono);font-size:13px;background:var(--panel2);padding:2px 6px;border-radius:5px;color:var(--mint)}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.pair div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:14px;color:var(--ink)}
+.pair b{display:block;margin-bottom:4px;font-size:13px;font-family:var(--mono);letter-spacing:.06em}
+
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr}
+  .panel{display:contents}
+  .panel .console{position:static;box-shadow:none}
+  .head{order:1}
+  .panel .console{order:2}
+  .panel .side-hint{order:3}
+  .stage{order:4}
+  .panel footer{order:5;margin-top:36px}
+  .panel .pair{grid-template-columns:1fr 1fr}
+}
+@media(max-width:640px){
+  .wrap{padding:32px 15px 60px}
+  .pair{grid-template-columns:1fr}
+  .panel .pair{grid-template-columns:1fr}
+  .tok{font-size:14px;padding:6px 10px}
+  .bill-calc{display:none}
+}
+@media(prefers-reduced-motion:reduce){*{transition-duration:.01ms !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="layout">
+  <main class="stage">
+
+  <h2><span class="n">1</span>连写 14 个词</h2>
+  <p class="sub">右上角的小数字是这个词第几次出现。</p>
+  <div class="card">
+    <p class="summary" id="summary"></p>
+    <div class="stream" id="stream"></div>
+    <button id="reroll">换个种子重来</button>
+  </div>
+
+  <h2><span class="n">2</span>看着冠军被自己拖垮</h2>
+  <p class="sub">纵轴是每个词当时的实际得分。每被选中一次，它的线就往下掉一级。虚线是同一个词改用 presence penalty 会走的路。</p>
+  <div class="card">
+    <div class="chart-wrap"><svg class="chart" id="chart" viewBox="0 0 700 280" role="img" aria-label="词得分随生成步数变化的折线图"></svg></div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <h2><span class="n">3</span>这一段的罚单</h2>
+  <p class="sub">一个方块 = 一次使用 = 一笔罚金。方块数量直接就是罚得多重。</p>
+  <div class="card"><div class="bill" id="bill"></div></div>
+
+  </main>
+
+  <aside class="panel">
+    <header class="head">
+      <p class="eyebrow">Frequency Penalty · 频率惩罚</p>
+      <h1>用得越多，<br>罚得越狠</h1>
+      <p class="lede">这是一套累进税。一个词第 1 次出现扣一笔，第 2 次扣两笔，第 3 次扣三笔——罚金随次数线性叠加。结果是任何词都会被自己的高频使用慢慢压下去，然后让位给别人。</p>
+    </header>
+
+    <div class="console">
+      <div class="pline">
+        <span class="lab">FREQUENCY_PENALTY =</span>
+        <span class="num" id="fv">0.00</span>
+        <span class="tag" id="tag">完全不管</span>
+      </div>
+      <input type="range" id="fs" min="-100" max="200" value="0" step="5" aria-label="frequency penalty 取值">
+      <div class="ticks"><span>−1.0 越用越上瘾</span><span>0</span><span>+2.0 一个词只准用一次</span></div>
+      <p class="fixed">temperature = 0.7，随机种子固定。文字的任何变化都只来自这一个参数。</p>
+    </div>
+    <p class="side-hint">拖动滑杆，左侧 1–3 三段同步重算</p>
+
+    <footer>
+      <b>公式：</b><code>logit' = logit − frequency × 出现次数 − presence × (出现过?1:0)</code>
+      <div class="pair">
+        <div><b>FREQUENCY</b>治的是"同一个词嚼烂"。它自带刹车，词被用多了自动退场，适合长文本防复读。</div>
+        <div><b>PRESENCE</b>治的是"不换话题"。它一刀切完就不再加码，适合推着模型去覆盖新内容。</div>
+      </div>
+      <br>
+      <b>踩坑提醒：</b>中文分词粒度细，惩罚会误伤"的、了、是"这类高频虚词。超过 1.0 之后模型为了躲开它们会开始写出别扭的句子。生产环境建议 <b>0.2 ~ 0.6</b>，别跟 presence 同时拉满。
+    </footer>
+  </aside>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var POOL = [
+    {w:'海',   l:5.0, c:'#3FD6A0'},
+    {w:'浪',   l:4.3, c:'#F5C542'},
+    {w:'沙滩', l:3.7, c:'#7CA8F0'},
+    {w:'风',   l:3.2, c:'#F2589B'},
+    {w:'船',   l:2.7, c:'#B694E8'},
+    {w:'海鸟', l:2.2, c:'#8FA0B8'},
+    {w:'灯塔', l:1.6, c:'#8FA0B8'},
+    {w:'贝壳', l:1.0, c:'#8FA0B8'}
+  ];
+  var STEPS = 14, TEMP = 0.7, TRACK = 4;
+
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  var seed = 424242;
+
+  var fs = document.getElementById('fs');
+  var fv = document.getElementById('fv');
+  var tag = document.getElementById('tag');
+  var streamEl = document.getElementById('stream');
+  var summaryEl = document.getElementById('summary');
+  var chart = document.getElementById('chart');
+  var legendEl = document.getElementById('legend');
+  var billEl = document.getElementById('bill');
+  var NS = 'http://www.w3.org/2000/svg';
+
+  function el(name, attrs){
+    var e = document.createElementNS(NS, name);
+    for(var k in attrs){ e.setAttribute(k, attrs[k]); }
+    return e;
+  }
+
+  /* 模拟一整段生成，同时记录每一步每个词的得分 */
+  function simulate(fp){
+    var rnd = mulberry32(seed);
+    var counts = new Array(POOL.length).fill(0);
+    var tokens = [];
+    var history = POOL.map(function(){ return []; });   // history[i][step] = 该步得分
+    var presence = POOL.map(function(){ return []; });  // 对照：presence 版得分
+
+    for(var t=0;t<STEPS;t++){
+      var scores = POOL.map(function(p,i){ return p.l - fp * counts[i]; });
+      POOL.forEach(function(p,i){
+        history[i].push(scores[i]);
+        presence[i].push(p.l - (counts[i] > 0 ? fp : 0));
+      });
+
+      var scaled = scores.map(function(s){ return s / TEMP; });
+      var m = Math.max.apply(null, scaled);
+      var ex = scaled.map(function(s){ return Math.exp(s - m); });
+      var sum = ex.reduce(function(a,b){ return a+b; }, 0);
+      var probs = ex.map(function(e){ return e/sum; });
+
+      var r = rnd(), acc = 0, idx = POOL.length - 1;
+      for(var i=0;i<probs.length;i++){ acc += probs[i]; if(r < acc){ idx = i; break; } }
+
+      counts[idx]++;
+      tokens.push({i:idx, nth:counts[idx]});
+    }
+    // 末态也记一笔，让折线画到最右边
+    POOL.forEach(function(p,i){
+      history[i].push(p.l - fp * counts[i]);
+      presence[i].push(p.l - (counts[i] > 0 ? fp : 0));
+    });
+    return {tokens:tokens, counts:counts, history:history, presence:presence};
+  }
+
+  function label(f){
+    if(f <= -0.5) return '越用越上瘾';
+    if(f < -0.02) return '偏爱重复';
+    if(f <= 0.02) return '完全不管';
+    if(f < 0.5)   return '温和刹车';
+    if(f < 1.1)   return '明显在换词';
+    return '一个词几乎只准用一次';
+  }
+
+  function renderStream(sim){
+    streamEl.innerHTML = '';
+    sim.tokens.forEach(function(tk){
+      var d = document.createElement('div');
+      d.className = 'tok' + (tk.nth >= 3 ? ' hot' : '');
+      d.innerHTML = POOL[tk.i].w + (tk.nth > 1 ? '<span class="sup">' + tk.nth + '</span>' : '');
+      streamEl.appendChild(d);
+    });
+    var kinds = sim.counts.filter(function(c){ return c > 0; }).length;
+    var maxC = Math.max.apply(null, sim.counts);
+    if(kinds <= 3){
+      summaryEl.className = 'summary bad';
+      summaryEl.textContent = '14 个词只用到 ' + kinds + ' 种，有个词被用了 ' + maxC + ' 次。';
+    }else{
+      summaryEl.className = 'summary ok';
+      summaryEl.textContent = '14 个词用到了 ' + kinds + ' 种，最多的那个用了 ' + maxC + ' 次。';
+    }
+  }
+
+  function renderChart(sim, fp){
+    chart.innerHTML = '';
+    var W = 700, H = 280, L = 46, R = 96, T = 18, B = 34;
+    var n = STEPS + 1;
+
+    // y 轴范围
+    var all = [];
+    for(var i=0;i<TRACK;i++){ all = all.concat(sim.history[i]); }
+    var yMax = Math.max(5.6, Math.max.apply(null, all) + .4);
+    var yMin = Math.min(0, Math.min.apply(null, all) - .4);
+
+    function X(i){ return L + (W - L - R) * (i / (n - 1)); }
+    function Y(v){ return T + (H - T - B) * (1 - (v - yMin) / (yMax - yMin)); }
+
+    // 网格
+    for(var g=0; g<=4; g++){
+      var v = yMin + (yMax - yMin) * g / 4;
+      chart.appendChild(el('line', {x1:L, y1:Y(v), x2:W-R, y2:Y(v), stroke:'#3D2F4B', 'stroke-width':1}));
+      var lb = el('text', {x:L-8, y:Y(v)+4, fill:'#9C88AA', 'font-size':11, 'text-anchor':'end',
+                           'font-family':'ui-monospace,monospace'});
+      lb.textContent = v.toFixed(1);
+      chart.appendChild(lb);
+    }
+    // x 轴
+    chart.appendChild(el('line', {x1:L, y1:Y(yMin), x2:W-R, y2:Y(yMin), stroke:'#5A4869', 'stroke-width':1.5}));
+    for(var s=0; s<STEPS; s+=2){
+      var xt = el('text', {x:X(s), y:H-12, fill:'#9C88AA', 'font-size':11, 'text-anchor':'middle',
+                           'font-family':'ui-monospace,monospace'});
+      xt.textContent = (s+1);
+      chart.appendChild(xt);
+    }
+    var xl = el('text', {x:(L+W-R)/2, y:H-12, fill:'#6E5B7C', 'font-size':11, 'text-anchor':'middle'});
+
+    function stepPath(vals){
+      var d = 'M' + X(0) + ',' + Y(vals[0]);
+      for(var i=1;i<vals.length;i++){
+        d += ' L' + X(i) + ',' + Y(vals[i-1]) + ' L' + X(i) + ',' + Y(vals[i]);
+      }
+      return d;
+    }
+
+    // presence 对照线（只画第 1 名）
+    chart.appendChild(el('path', {d:stepPath(sim.presence[0]), fill:'none', stroke:'#9C88AA',
+      'stroke-width':2, 'stroke-dasharray':'6 5', opacity:.75}));
+
+    // frequency 主线
+    for(var k=TRACK-1; k>=0; k--){
+      chart.appendChild(el('path', {d:stepPath(sim.history[k]), fill:'none', stroke:POOL[k].c,
+        'stroke-width':2.5, 'stroke-linejoin':'round'}));
+      var tx = el('text', {x:W-R+10, y:Y(sim.history[k][n-1])+4, fill:POOL[k].c,
+                           'font-size':13, 'font-weight':700});
+      tx.textContent = POOL[k].w;
+      chart.appendChild(tx);
+    }
+
+    // 被选中的时刻打点
+    sim.tokens.forEach(function(tk, s){
+      if(tk.i >= TRACK) return;
+      chart.appendChild(el('circle', {cx:X(s), cy:Y(sim.history[tk.i][s]), r:4.5,
+        fill:POOL[tk.i].c, stroke:'#17111E', 'stroke-width':2}));
+    });
+
+    legendEl.innerHTML = '';
+    for(var j=0;j<TRACK;j++){
+      var lg = document.createElement('div'); lg.className='lg';
+      lg.innerHTML = '<span class="sw" style="background:' + POOL[j].c + '"></span>' + POOL[j].w + ' 的得分';
+      legendEl.appendChild(lg);
+    }
+    var dl = document.createElement('div'); dl.className='lg';
+    dl.innerHTML = '<span class="sw dash"></span>如果"' + POOL[0].w + '"改用 presence penalty（掉一次就躺平）';
+    legendEl.appendChild(dl);
+  }
+
+  function renderBill(sim, fp){
+    billEl.innerHTML = '';
+    var order = POOL.map(function(p,i){ return i; })
+                    .filter(function(i){ return sim.counts[i] > 0; })
+                    .sort(function(a,b){ return sim.counts[b] - sim.counts[a]; });
+    if(!order.length){ billEl.textContent = '—'; return; }
+
+    var maxC = Math.max.apply(null, sim.counts);
+    order.forEach(function(i){
+      var c = sim.counts[i];
+      var row = document.createElement('div'); row.className='bill-row';
+      var blocks = '';
+      for(var b=0;b<maxC;b++){
+        blocks += '<span class="blk' + (b < c ? '' : ' ghost') + '"></span>';
+      }
+      row.innerHTML =
+        '<span class="bill-w">' + POOL[i].w + '</span>' +
+        '<span class="blocks">' + blocks + '</span>' +
+        '<span class="bill-calc">' + Math.abs(fp).toFixed(2) + ' × ' + c + '</span>' +
+        '<span class="bill-tot">' + (fp >= 0 ? '−' : '+') + Math.abs(fp * c).toFixed(2) + '</span>';
+      billEl.appendChild(row);
+    });
+  }
+
+  function render(){
+    var f = fs.value / 100;
+    fv.textContent = (f >= 0 ? '' : '−') + Math.abs(f).toFixed(2);
+    fv.style.color = f < -0.02 ? '#B694E8' : (f > 0.02 ? 'var(--mint)' : 'var(--muted)');
+    tag.textContent = label(f);
+
+    var sim = simulate(f);
+    renderStream(sim);
+    renderChart(sim, f);
+    renderBill(sim, f);
+  }
+
+  var q = false;
+  fs.addEventListener('input', function(){
+    if(q) return; q = true;
+    requestAnimationFrame(function(){ q = false; render(); });
+  });
+  document.getElementById('reroll').addEventListener('click', function(){
+    seed = (Math.random() * 1e9) | 0;
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
